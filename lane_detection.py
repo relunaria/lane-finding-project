@@ -1,4 +1,4 @@
-"""Step 4: find lane-line pixels and fit polynomials (bird's-eye view)."""
+"""Step 4: lane-line pixels and polynomial fit"""
 
 from dataclasses import dataclass
 
@@ -15,12 +15,10 @@ class LanePixels:
 
 @dataclass
 class LaneFit:
-    # Polynomials x = A * y**2 + B * y + C in warped-image pixels.
     left_fit: np.ndarray
     right_fit: np.ndarray
     left_pixels: LanePixels
     right_pixels: LanePixels
-    # Search windows (x1, y1, x2, y2), drawn only for visualization.
     windows: list[Window]
 
 
@@ -29,17 +27,12 @@ def find_line_bases(
     warped_yellow: np.ndarray | None = None,
     min_yellow_pixels: int = 500,
 ) -> tuple[int, int]:
-    # Lane lines are nearly vertical near the car, so the column histogram
-    # of the bottom half peaks at their x-positions.
     height, width = warped_binary.shape[:2]
     histogram = np.sum(warped_binary[height // 2:] > 0, axis=0)
     midpoint = width // 2
     left_base = int(np.argmax(histogram[:midpoint]))
     right_base = int(np.argmax(histogram[midpoint:])) + midpoint
 
-    # The yellow center line is the left border of the lane. If it is
-    # clearly visible, it is a more reliable start than the brightest
-    # column, which on curvy roads can be the road edge or a shadow.
     if warped_yellow is not None:
         yellow = np.sum(warped_yellow[height // 2:, :midpoint] > 0, axis=0)
         if yellow.sum() >= min_yellow_pixels:
@@ -62,8 +55,6 @@ def find_pixels_sliding_window(
     selected: list[list[np.ndarray]] = [[], []]
     windows = []
 
-    # Move windows upward from the bottom; each window follows the mean x
-    # of the pixels found in it, so the search follows curved lines.
     for index in range(window_count):
         y_high = height - index * window_height
         y_low = y_high - window_height
@@ -93,7 +84,6 @@ def find_pixels_around_fit(
     right_fit: np.ndarray,
     margin: int = 80,
 ) -> tuple[LanePixels, LanePixels]:
-    # For video: search only near the lines found in the previous frame.
     ys, xs = np.nonzero(warped_binary)
     pixels = []
     for fit in (left_fit, right_fit):
@@ -105,10 +95,6 @@ def find_pixels_around_fit(
 def fit_parallel_lines(
     left: LanePixels, right: LanePixels, min_pixels: int = 200
 ) -> tuple[np.ndarray, np.ndarray] | None:
-    # Fit x = A * y**2 + B * y + C for both lines at once, with A and B
-    # shared and a separate offset C per line. Lane lines are parallel in
-    # the bird's-eye view, so the solid line stabilizes the shape of the
-    # dashed one. Each side is weighted equally regardless of pixel count.
     if len(left.xs) < min_pixels or len(right.xs) < min_pixels:
         return None
 
@@ -134,7 +120,6 @@ def find_lane(
     previous: LaneFit | None = None,
     warped_yellow: np.ndarray | None = None,
 ) -> LaneFit | None:
-    """Find lane pixels and fit both lines; None if a line is missing."""
     windows: list[Window] = []
     if previous is not None:
         left_pixels, right_pixels = find_pixels_around_fit(

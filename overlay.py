@@ -1,11 +1,10 @@
-"""Step 6: draw the detected lane and measurements on the original image."""
+"""Step 6: drawing the lane back onto the road"""
 
 import cv2
 import numpy as np
 
 from lane_detection import LaneFit
 
-# Above this radius the road is reported as straight.
 STRAIGHT_RADIUS = 5000
 
 
@@ -15,9 +14,6 @@ def draw_lane_area(
     inverse_matrix: np.ndarray,
     top_y: int = 0,
 ) -> np.ndarray:
-    # Fill the area between the fitted lines in the bird's-eye view,
-    # warp it back with the inverse perspective and blend it in.
-    # Only rows from top_y down to the car are drawn.
     height, width = image.shape[:2]
     if top_y >= height - 1:
         return image.copy()
@@ -51,7 +47,6 @@ def draw_measurements(
 
     result = image.copy()
     for row, text in enumerate((radius_text, offset_text)):
-        # Dark outline under white text keeps it readable on any background.
         for color, thickness in (((0, 0, 0), 8), ((255, 255, 255), 3)):
             cv2.putText(
                 result,

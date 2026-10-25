@@ -1,4 +1,4 @@
-"""Figures for the README: one image per pipeline step."""
+"""Figures for the README"""
 
 import cv2
 import numpy as np
@@ -12,15 +12,13 @@ def to_bgr(binary: np.ndarray) -> np.ndarray:
 
 
 def binary_row(frame: Frame) -> list[np.ndarray]:
-    # Step 2. Contribution: green - color only, magenta - gradient only,
-    # white - both.
+    # Step 2
     contribution = cv2.merge([frame.gradient, frame.color, frame.gradient])
     return [frame.corrected, to_bgr(frame.binary), contribution]
 
 
 def perspective_row(frame: Frame, setup: Setup) -> list[np.ndarray]:
-    # Step 3: source trapezoid, warped image with the destination
-    # rectangle, warped binary image.
+    # Step 3
     source_view = frame.corrected.copy()
     cv2.polylines(
         source_view, [setup.source.astype(np.int32)], True, (0, 0, 255), 3
@@ -40,8 +38,7 @@ def perspective_row(frame: Frame, setup: Setup) -> list[np.ndarray]:
 
 
 def lane_fit_row(frame: Frame, lane: LaneFit | None) -> list[np.ndarray]:
-    # Step 4: windows green, left pixels red, right pixels blue,
-    # fitted polynomials yellow.
+    # Step 4
     preview = to_bgr(frame.warped_binary // 3)
     if lane is not None:
         for x1, y1, x2, y2 in lane.windows:
@@ -60,7 +57,6 @@ def lane_fit_row(frame: Frame, lane: LaneFit | None) -> list[np.ndarray]:
 def stack_rows(
     rows: list[list[np.ndarray]], tile_size: tuple[int, int] = (640, 360)
 ) -> np.ndarray:
-    # Tiles scaled down; short rows are padded with black.
     columns = max(len(row) for row in rows)
     blank = np.zeros((tile_size[1], tile_size[0], 3), dtype=np.uint8)
     return cv2.vconcat([

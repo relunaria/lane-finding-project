@@ -1,4 +1,4 @@
-"""Step 3: perspective transform to the bird's-eye view."""
+"""Step 3: perspective transform to the bird's-eye view"""
 
 import cv2
 import numpy as np
@@ -7,7 +7,6 @@ import numpy as np
 def fit_straight_line(
     xs: np.ndarray, ys: np.ndarray, keep_fraction: float = 0.8
 ) -> tuple[float, float]:
-    # Fit x = slope * y + intercept, then refit without the worst outliers.
     slope, intercept = np.polyfit(ys, xs, 1)
     residuals = np.abs(xs - (slope * ys + intercept))
     inliers = residuals <= np.quantile(residuals, keep_fraction)
@@ -15,13 +14,12 @@ def fit_straight_line(
     return float(slope), float(intercept)
 
 
-Line = tuple[float, float]  # x = slope * y + intercept
+Line = tuple[float, float]
 
 
 def fit_lane_lines(
     binary: np.ndarray, min_y: int = 0, min_pixels: int = 100
 ) -> tuple[Line, Line] | None:
-    # Straight lines through the left and right lane pixels below min_y.
     ys, xs = np.nonzero(binary[min_y:])
     ys = ys + min_y
     width = binary.shape[1]
@@ -56,9 +54,6 @@ def trapezoid_from_lines(
 def estimate_source_points(
     binaries: list[np.ndarray], top_ratio: float = 455 / 720
 ) -> np.ndarray:
-    # Fit both lane lines on binary images of a straight road and take
-    # their x-positions at the top and bottom of the trapezoid, averaged
-    # over all images.
     height = binaries[0].shape[0]
     corners = []
     for binary in binaries:
@@ -72,7 +67,6 @@ def estimate_source_points(
 
 
 def get_destination_points(image_size: tuple[int, int]) -> np.ndarray:
-    # Rectangle in the middle half of the image: lane lines become vertical.
     width, height = image_size
     return np.float32([
         (width * 0.25, 0),
@@ -96,8 +90,6 @@ def warp_image(
 def measure_lane_widths(
     warped_binary: np.ndarray, bands: int = 3
 ) -> list[float]:
-    # Distance between the median x of left and right lane pixels in
-    # horizontal bands (top to bottom). Similar values mean parallel lines.
     height, width = warped_binary.shape[:2]
     widths = []
     for index in range(bands):

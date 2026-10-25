@@ -1,5 +1,7 @@
 ## Lane Finding Project
 
+Student: **Arina Osinnikova, E2 166/2026**
+
 The goals / steps of this project are the following:
 
 * Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
@@ -30,15 +32,11 @@ Each step of the pipeline lives in its own file:
 | `lane_detection.py` | step 4: lane pixels and polynomial fit |
 | `curvature.py` | step 5: curvature and car position |
 | `overlay.py` | step 6: drawing the lane back on the road |
-| `pipeline.py` | things computed once (camera, perspective) and steps 1–3 for a single frame |
+| `pipeline.py` | steps 1–3 for one frame, plus what is computed only once (camera, perspective) |
 | `lane_finding.py` | runs everything on the test images and saves the figures for this README |
 | `figures.py` | helpers for those figures |
-| `video.py` | runs everything on the videos |
+| `video.py` | runs everything on the videos, saves the videos and GIF previews |
 | `tracking.py` | video only: follows the lane from frame to frame |
-
-### Which test images I used
-
-`test_images/` has 17 images, but only 11 of them come from the calibrated camera: `straight_lines1–2.jpg`, `test1–6.jpg` and the three `challange*.jpg` frames. The `challange` frames are saved at 960×540, so I resize them to 1280×720 first (same 16:9 ratio, same car hood). The other six (`solidWhite*`, `solidYellow*`, `whiteCarLaneSwitch.jpg`) are from a different camera with no hood and a different angle, so my calibration and perspective don't fit them and I left them out.
 
 ---
 
@@ -48,15 +46,15 @@ Each step of the pipeline lives in its own file:
 
 The code is in `camera_calibration.py`. I used the 20 chessboard photos from `camera_cal/`.
 
-To find the inner corners I used `cv2.findChessboardCornersSB()`. Not every photo shows the whole board — some are cropped — so `find_chessboard_corners()` tries different board sizes, starting with the largest. It found corners on all 20 photos: 18 with a 6×9 grid and 2 with 5×9.
+To find the inner corners I used `cv2.findChessboardCornersSB()`. Not every photo shows the whole board, some are cropped, so `find_chessboard_corners()` tries different board sizes, starting with the largest. It found corners on all 20 photos: 18 with a 6x9 grid and 2 with 5x9.
 
 For every photo, `create_object_points()` makes the "ideal" corner positions: a flat grid with `z = 0` and a step of 1 between corners. `cv2.calibrateCameraExtended()` then finds the camera matrix and distortion coefficients that best map this ideal grid onto the corners found in the photos.
 
-Two photos are 1281×721 instead of 1280×720. I assumed they were slightly resized and scaled their corner coordinates to 1280×720. I didn't verify this, but the overall error stayed low.
+Two photos are 1281x721 instead of 1280x720. I assumed they were slightly resized and scaled their corner coordinates to 1280x720. I didn't verify this, but the overall error stayed low.
 
-The average reprojection error is **0.86 px**. The parameters are saved to `camera_parameters.npz`, so the rest of the pipeline doesn't have to recalibrate.
+The average reprojection error is 0.86 px. The parameters are saved to `camera_parameters.npz`, so the rest of the pipeline doesn't have to recalibrate.
 
-Original on the left, corrected on the right — the curved board edges become straight:
+Original on the left, corrected on the right, and the curved board edges become straight:
 
 ![Original and distortion-corrected calibration image](docs/undistortion_comparison.jpg)
 
@@ -72,18 +70,18 @@ On a road photo the difference is small and mostly visible near the edges. It st
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-The code is in `thresholding.py`. The idea is to combine two masks — one based on color and one based on edges — and then throw away everything that is clearly not road.
+The code is in `thresholding.py`. The idea is to combine two masks, one based on color, another based on edges, and then throw away everything that is clearly not road.
 
 **Color** (`create_color_binary()`). Yellow and white lines need different approaches:
 
-- *Yellow* is easy to find in HLS: I keep hue 15–40 (OpenCV uses a 0–179 scale), L ≥ 50, S ≥ 90. Hue doesn't change much between sun and shadow, so this works in both.
+- *Yellow* is found in HLS: hue 15–40 (OpenCV uses a 0–179 scale), L ≥ 50, S ≥ 90. Hue doesn't change much between sun and shadow, so this works in both. But in `challenge02` (cloudy day, old paint) the yellow line is faded, with a saturation of only 45–120, and was mostly missed. Simply lowering S didn't work and the light concrete in `test1.jpg` is slightly yellowish too and the whole bridge lit up. So I added a second rule: a pixel also counts as yellow if its hue is right, S ≥ 40, and it is clearly *more yellow than its surroundings*. For "how yellow" I use the b channel of LAB, and for "more than its surroundings" the same top-hat trick as for white lines below (threshold 12). The concrete is evenly yellowish, so it disappears; the faded line is a thin stripe, so it stays.
 - *White* was harder. With a fixed brightness threshold it either missed lines on dark asphalt or marked the entire light concrete bridge in `test1.jpg` as "white". So the threshold adapts to each image: I take the brightness of the road in the lower middle of the image and only keep pixels that are brighter than 97% of it.
 - That still left patches of bright concrete. To remove them I added a **top-hat** filter (31×31): it keeps only thin things that are brighter than what surrounds them. A lane line is thin and bright; a concrete slab is wide, so it disappears.
 
 **Gradient** (`create_gradient_binary()`). This helps where the color mask misses thin or distant lines:
 
-- Sobel in x on the blurred L channel, threshold ≥ 30 — lane lines create strong left-right brightness changes.
-- Gradient direction between 0.6 and 1.3 rad — in the camera image lane lines are diagonal, so this throws out horizontal and vertical edges.
+- Sobel in x on the blurred L channel, threshold ≥ 30 and lane lines create strong left-right brightness changes.
+- Gradient direction between 0.6 and 1.3 rad, in the camera image lane lines are diagonal, so this throws out horizontal and vertical edges.
 - At first the gradient also found the edge between the road and the concrete barrier, which looks just like a long lane line. A lane line has two edges around a bright stripe, the barrier only one. So I keep gradient pixels only where the top-hat is also positive (≥ 10).
 
 **Region of interest** (`create_region_mask()`): a trapezoid in front of the car. It cuts off the sky, trees, cars in other lanes and the hood.
@@ -104,12 +102,12 @@ I didn't want to guess the four source points by hand, so I measured them. On `s
 
 The destination is a rectangle in the middle half of the image:
 
-| Source     | Destination |
-|:----------:|:-----------:|
-| 589, 455   | 320, 0      |
-| 694, 455   | 960, 0      |
-| 1108, 720  | 960, 720    |
-| 212, 720   | 320, 720    |
+| Source | Destination |
+|:---:|:---:|
+| 589, 455 | 320, 0 |
+| 694, 455 | 960, 0 |
+| 1108, 720 | 960, 720 |
+| 213, 720 | 320, 720 |
 
 `cv2.getPerspectiveTransform()` gives the matrix (and the inverse, which I need in step 6), and `warp_image()` applies it with `cv2.warpPerspective()`. For binary images I use nearest-neighbor interpolation so the mask stays black and white.
 
@@ -119,13 +117,13 @@ Each row: the source trapezoid, the warped image with the destination rectangle,
 
 ![Perspective transform](docs/perspective_examples.jpg)
 
-On the other images the road curves, so the lines bend — that's expected. The far part of the road gets stretched a lot, so pixels there are wider and noisier.
+On the other images the road curves, so the lines bend, that's expected. The far part of the road gets stretched a lot, so pixels there are wider and noisier.
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
 The code is in `lane_detection.py`; `find_lane()` does the whole step.
 
-**Where to start** (`find_line_bases()`). Close to the car the lines are almost vertical in the bird's-eye view. If I count white pixels in every column of the bottom half, I get two peaks — one per line. The highest peak on the left and on the right are the starting points.
+**Where to start** (`find_line_bases()`). Close to the car the lines are almost vertical in the bird's-eye view. If I count white pixels in every column of the bottom half, I get two peaks, one per line. The highest peak on the left and on the right are the starting points.
 
 **Sliding windows** (`find_pixels_sliding_window()`). I split the image into 9 horizontal bands and move a 200 px wide window up from the bottom for each line. Pixels inside the window belong to that line. If the window found at least 50 pixels, the next one is centered on their average x. That way the windows follow a curve, and in the gaps of a dashed line they just keep going straight.
 
@@ -162,19 +160,19 @@ Results from `lane_finding.py`:
 
 | Image | Radius | Offset |
 |---|---|---|
-| straight_lines1 | 4093 m | −0.08 m |
-| straight_lines2 | 32878 m | −0.09 m |
-| test1 | 474 m | −0.35 m |
-| test2 | 540 m | −0.43 m |
-| test3 | 531 m | −0.23 m |
-| test4 | 1378 m | −0.29 m |
-| test5 | 515 m | −0.06 m |
-| test6 | 1113 m | −0.28 m |
-| challange00101 | 781 m | −0.30 m |
-| challange00111 | 10636 m | −0.14 m |
-| challange00136 | 550 m | −0.07 m |
+| straight_lines1 | 5376 m | −0.08 m |
+| straight_lines2 | 31883 m | −0.09 m |
+| test1 | 480 m | −0.35 m |
+| test2 | 553 m | −0.43 m |
+| test3 | 538 m | −0.23 m |
+| test4 | 1234 m | −0.30 m |
+| test5 | 748 m | −0.04 m |
+| test6 | 1053 m | −0.29 m |
+| challange00101 | 771 m | −0.30 m |
+| challange00111 | 14105 m | −0.14 m |
+| challange00136 | 560 m | −0.06 m |
 
-The straight roads give several kilometers — basically straight. The curves give 0.5–1.4 km. `challange00111` is an outlier: it is on the same curve as its neighbors (0.78 and 0.55 km) but shows over 10 km. A single frame is simply not very reliable, which is why in the video I average over time. The car is slightly left of center everywhere. All numbers are rough — the meters-per-pixel scale itself is only accurate to about 10%.
+The straight roads give several kilometers basically straight. The curves give 0.5–1.2 km. `challange00111` is an outlier: it is on the same curve as its neighbors (0.77 and 0.56 km) but shows over 10 km. A single frame is simply not very reliable, which is why in the video I average over time. The car is slightly left of center everywhere. All numbers are rough, the meters-per-pixel scale itself is only accurate to about 10%.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
@@ -190,43 +188,47 @@ The green area follows the markings on all 11 images, including the shadows in `
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-- [project_video01_output.mp4](output_videos/project_video01_output.mp4)
-- [project_video02_output.mp4](output_videos/project_video02_output.mp4)
-- [project_video03_output.mp4](output_videos/project_video03_output.mp4)
-- [challenge01_output.mp4](output_videos/challenge01_output.mp4)
-- [challenge02_output.mp4](output_videos/challenge02_output.mp4)
-- [challenge03_output.mp4](output_videos/challenge03_output.mp4)
+Short previews (6 seconds from the middle of each video, made by `video.py`). Click a preview to open the full video.
 
-`video.py` runs the same steps on every frame. On its own a single frame can go wrong — a shadow, a missing dash, a wrong curvature like `challange00111` above. In a video I can use the frames before it, so `LaneTracker` in `tracking.py` adds a few things:
+| | |
+|:---:|:---:|
+| [![project_video01](docs/project_video01.gif)](output_videos/project_video01_output.mp4) | [![project_video02](docs/project_video02.gif)](output_videos/project_video02_output.mp4) |
+| project_video01 | project_video02 |
+| [![project_video03](docs/project_video03.gif)](output_videos/project_video03_output.mp4) | [![challenge01](docs/challenge01.gif)](output_videos/challenge01_output.mp4) |
+| project_video03 | challenge01 |
+| [![challenge02](docs/challenge02.gif)](output_videos/challenge02_output.mp4) | [![challenge03](docs/challenge03.gif)](output_videos/challenge03_output.mp4) |
+| challenge02 | challenge03 |
 
-- **Search near the last lane** first, and only fall back to the sliding windows if that fails.
-- **Reject lanes that don't make sense** (`is_plausible()`). The lane must be 3.0–4.5 m wide, the radius at least 30 m (mountain roads really do have curves that tight), and the car must be within 1 m of the lane center. On roads with a yellow center line, there must be no yellow *inside* the lane — if there is, the detection has jumped to the oncoming lane.
-- **Reject sudden jumps** (`is_close()`). A line can't move more than 0.5 m between two frames.
-- **Smooth the result.** The lane is the average of the last 5 good detections. For the radius I average 1/R over the last 30 frames (about a second). On an almost straight road one frame says 300 m and the next says "straight"; averaging 1/R instead of R keeps this stable.
-- **Don't draw across the yellow line** (`find_clear_top()`). On sharp curves the parabola can bend into the oncoming lane far ahead, so the green area is cut off where yellow appears inside it.
-- **Start from the yellow line.** If the yellow center line is clearly visible, the window search starts the left line there, instead of at a shadow or the road edge.
-- **Missing frames.** If nothing good is found, the last lane stays on screen for up to 10 frames. After that the video says "Lane not detected" and the search starts over.
+`video.py` runs the same steps on every frame. On its own a single frame can go wrong, because of a shadow, a missing dash, a wrong curvature like `challange00111` above. In a video I can use the frames before it, so `LaneTracker` in `tracking.py` adds a few things:
 
-**A different camera angle in some videos** (`adapt_perspective()` in `video.py`). At first `challenge02` and `project_video02` were bad, even though the road looked easy. The reason was the camera: it's mounted at a slightly different angle than in the test images, so the horizon is 8–19 px higher or lower. That sounds tiny, but the top of my trapezoid is only about 35 px below the horizon. The lane in the bird's-eye view looked 2.8 m or 4.7 m wide, and the plausibility check threw it out.
+- Search near the last lane first, and only fall back to the sliding windows if that fails.
+- Reject lanes that don't make sense (`is_plausible()`). The lane must be 3.0–4.5 m wide, the radius at least 30 m (mountain roads really do have curves that tight), and the car must be within 1 m of the lane center. On roads with a yellow center line, there must be no yellow *inside* the lane, if there is, the detection has jumped to the oncoming lane.
+- Reject sudden jumps (`is_close()`). A line can't move more than 0.5 m between two frames, and the curvature 1/R can't change by more than 1/200 m⁻¹. A real road bends gradually, so a sudden bend means the fit was pulled by something that isn't a lane line.
+- Smooth the result. The lane is the average of the last 5 good detections. For the radius I average 1/R over the last 30 frames (about a second). On an almost straight road one frame says 300 m and the next says "straight"; averaging 1/R instead of R keeps this stable.
+- Don't draw across the yellow line (`find_clear_top()`). On sharp curves the parabola can bend into the oncoming lane far ahead, so the green area is cut off where yellow appears inside it.
+- Start from the yellow line. If the yellow center line is clearly visible, the window search starts the left line there, instead of at a shadow or the road edge.
+- Missing frames. If nothing good is found, the last lane stays on screen for up to 10 frames. After that the video says "Lane not detected" and the search starts over.
 
-So before processing a video, I sample 40 frames, fit straight lines to the near part of the lane and find where they meet — that's the horizon. If it differs from the test images by more than 5 px (or the lane is more than 10% wider or narrower), the video gets its own trapezoid. This brought the lost frames down from 239 to 7 in `challenge02` and from 43 to 0 in `project_video02`. (`project_video02` is actually from the other camera — no hood, same scene as `solidYellowLeft.jpg` — so the calibration doesn't strictly fit it, but the adapted perspective makes up for most of that.)
+**A different camera angle in some videos** (`adapt_perspective()` in `video.py`). At first `challenge02` and `project_video02` were bad, even though the road looked easy. The reason was the camera: it's mounted at a slightly different angle than in the test images, so the horizon is 6–21 px higher or lower. That sounds tiny, but the top of my trapezoid is only about 35 px below the horizon. The lane in the bird's-eye view looked 2.8 m or 4.7 m wide, and the plausibility check threw it out.
 
-Videos with a different size are resized to 1280×720. The output is written in H.264 if OpenCV supports it, so it plays in QuickTime and the browser.
+So before processing a video, I sample 40 frames, fit straight lines to the near part of the lane and find where they meet it means that's the horizon. If it differs from the test images by more than 5 px (or the lane is more than 10% wider or narrower), the video gets its own trapezoid. This brought the lost frames down from 239 to about 10 in `challenge02` and from 43 to 0 in `project_video02`. (`project_video02` is actually from the other camera, no hood, same scene as `solidYellowLeft.jpg` — so the calibration doesn't strictly fit it, but the adapted perspective makes up for most of that.)
 
-Per-video statistics printed by `video.py` (tracked = found near the last lane, searched = found by a new window search, reused = last lane kept, lost = nothing shown):
+Videos with a different size are resized to 1280x720. The output is written in H.264 if OpenCV supports it, so it plays in QuickTime and the browser. For the README, `video.py` also saves a 6-second GIF from the middle of each video to `docs/`, because GitHub can't play an mp4 inside a README.
+
+What `video.py` printed for each video. "Tracked" means found near the previous lane, "searched" found by a new window search, "reused" the previous lane was kept, "lost" nothing was shown:
 
 | Video | Frames | Tracked | Searched | Reused | Lost | Perspective |
 |---|---|---|---|---|---|---|
-| project_video01 | 221 | 220 | 1 | 0 | 0 | own (horizon y = 406) |
-| project_video02 | 681 | 679 | 1 | 1 | 0 | own (y = 412) |
-| project_video03 | 1260 | 1254 | 1 | 5 | 0 | test images (y = 421) |
-| challenge01 | 251 | 248 | 1 | 2 | 0 | test images (y = 418) |
-| challenge02 | 484 | 430 | 3 | 44 | 7 | own (y = 439) |
-| challenge03 | 1199 | 650 | 49 | 248 | 252 | test images (y = 416) |
+| project_video01 | 221 | 220 | 1 | 0 | 0 | own |
+| project_video02 | 681 | 679 | 1 | 1 | 0 | own |
+| project_video03 | 1260 | 1254 | 1 | 5 | 0 | from test images |
+| challenge01 | 251 | 248 | 1 | 2 | 0 | from test images |
+| challenge02 | 484 | 455 | 2 | 16 | 11 | own |
+| challenge03 | 1199 | 576 | 49 | 325 | 249 | from test images |
 
 On the three project videos and `challenge01` the lane is there in practically every frame. The lines wobble a little but never jump off the road. `challenge02` (concrete, a bridge, a different camera angle) shows the lane in 98% of frames.
 
-`challenge03` — a winding mountain road through a forest — is a different story. The lane is found in 58% of frames and missing in 21%. I decided it's better to show "Lane not detected" than a lane that leads into the oncoming lane or off the road, and tuned the checks for that.
+`challenge03` is a different story. The lane is found in about half of the frames and missing in about a fifth. I decided it's better to show "Lane not detected" than a lane that leads into the oncoming lane or off the road, and tuned the checks for that.
 
 ### Discussion
 
@@ -235,6 +237,7 @@ On the three project videos and `challenge01` the lane is there in practically e
 **What gave me trouble**
 
 - *Light concrete and shadows.* A fixed threshold for white lines didn't work on both asphalt and concrete. An adaptive threshold plus the top-hat filter fixed it.
+- *Faded yellow paint* in `challenge02`. Without it the lane shape depended only on the dashed line and sometimes bent off to the side. Looking for "more yellow than the surroundings" instead of "very saturated yellow" fixed this.
 - *The barrier looked like a lane line* in the gradient mask. Keeping only thin bright stripes solved this.
 - *Dashed lines* gave unstable curves on their own. Fitting both lines together with a shared shape fixed it.
 - *Different camera angles* between videos. I didn't expect a few pixels of horizon to matter this much. Now the perspective is adjusted per video.

@@ -1,7 +1,4 @@
-"""Runs the pipeline on test_images/ and saves the README figures to docs/.
-
-Run `python3 camera_calibration.py` once first, then `python3 lane_finding.py`.
-"""
+"""Runs all steps on test_images/ and saves the figures to docs/"""
 
 import cv2
 
@@ -28,10 +25,6 @@ def main() -> None:
     for x, y in setup.source:
         print(f"  ({x:.0f}, {y:.0f})")
 
-    # straight_lines*.jpg and test*.jpg are 1280x720 frames from the
-    # project videos; challange*.jpg are frames from the same camera saved
-    # at 960x540. The other images in test_images/ (solid*.jpg,
-    # whiteCarLaneSwitch.jpg) come from a different camera and are not used.
     paths = [
         *sorted(IMAGES_DIR.glob("straight_lines*.jpg")),
         *sorted(IMAGES_DIR.glob("test*.jpg")),
@@ -40,14 +33,16 @@ def main() -> None:
 
     binary_rows, perspective_rows, lane_fit_rows, results = [], [], [], []
     for path in paths:
-        frame = prepare_frame(load_image(path), setup)  # steps 1-3
-        lane = find_lane(frame.warped_binary)  # step 4
+        # Steps 1-3
+        frame = prepare_frame(load_image(path), setup)
+        # Step 4
+        lane = find_lane(frame.warped_binary)
 
         result = frame.corrected
         if lane is None:
             print(f"{path.name}: lane lines not found")
         else:
-            # Steps 5 and 6.
+            # Steps 5 and 6
             radius = lane_curvature(lane, setup.image_size[1])
             offset = vehicle_offset(lane, setup.image_size, setup.matrix)
             result = draw_lane_area(
@@ -59,7 +54,7 @@ def main() -> None:
                 f"offset {offset:+.2f} m"
             )
 
-        # Check of step 3: similar widths mean parallel lines.
+        # Step 3 check: lane width at the top, middle and bottom
         widths = measure_lane_widths(frame.warped_binary)
         widths_text = ", ".join(f"{width:.0f}" for width in widths)
         print(f"{path.name}: lane width top to bottom {widths_text} px")

@@ -1,3 +1,5 @@
+"""Step 1: camera calibration from chessboard images"""
+
 import re
 from collections import Counter
 from pathlib import Path
@@ -44,7 +46,6 @@ def find_chessboard_corners(
     )
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Try the fast search first; use the exhaustive search only if it fails.
     for flags in (0, cv2.CALIB_CB_EXHAUSTIVE | cv2.CALIB_CB_ACCURACY):
         for pattern_size in candidates:
             found, corners = cv2.findChessboardCornersSB(

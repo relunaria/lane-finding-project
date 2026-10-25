@@ -1,10 +1,4 @@
-"""Runs the pipeline on videos, with tracking between frames.
-
-Usage:
-    python3 video.py                                   # all test_videos/*.mp4
-    python3 video.py test_videos/project_video01.mp4   # selected videos
-Results are saved to output_videos/<name>_output.mp4.
-"""
+"""Runs all steps on test_videos/ and saves the results to output_videos/"""
 
 import sys
 from collections.abc import Iterator
@@ -12,6 +6,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image
 
 from curvature import vehicle_offset
 from overlay import draw_lane_area, draw_lane_not_detected, draw_measurements
@@ -21,6 +16,10 @@ from tracking import LaneTracker, find_clear_top
 
 VIDEOS_DIR = PROJECT_DIR / "test_videos"
 OUTPUT_DIR = PROJECT_DIR / "output_videos"
+DOCS_DIR = PROJECT_DIR / "docs"
+GIF_SECONDS = 6
+GIF_FPS = 8
+GIF_SIZE = (480, 270)
 
 
 def read_frames(path: Path, step: int = 1) -> Iterator[np.ndarray]:
@@ -39,7 +38,6 @@ def read_frames(path: Path, step: int = 1) -> Iterator[np.ndarray]:
 
 
 def setup_vanishing_y(source: np.ndarray) -> float:
-    # Where the sides of the source trapezoid meet.
     lines = []
     for bottom, top in ((source[3], source[0]), (source[2], source[1])):
         slope = (top[0] - bottom[0]) / (top[1] - bottom[1])
@@ -50,17 +48,6 @@ def setup_vanishing_y(source: np.ndarray) -> float:
 def adapt_perspective(
     path: Path, setup: Setup, sample_count: int = 40
 ) -> Setup:
-    """Re-estimate the perspective if the camera is mounted differently.
-
-    The perspective from straight_lines*.jpg fits the project videos. In
-    other videos the camera can be tilted or mounted at another height,
-    which moves the horizon. Straight lines are fitted to the lane pixels
-    in the lower third of sampled frames; their median vanishing point
-    shows where the horizon is. If it is more than 5 px away from the one
-    in the image setup, or the lane at the bottom of the image is more than
-    10% wider or narrower, a new trapezoid is built from the median line
-    positions.
-    """
     width, height = setup.image_size
     total = int(cv2.VideoCapture(str(path)).get(cv2.CAP_PROP_FRAME_COUNT))
     step = max(1, total // sample_count)
@@ -78,7 +65,6 @@ def adapt_perspective(
         np.median([vanishing_point(lines)[1] for lines in all_lines])
     )
     setup_vp_y = setup_vanishing_y(setup.source)
-    # Keep the same distance between the horizon and the trapezoid top.
     top_y = video_vp_y + (setup.source[0][1] - setup_vp_y)
     source = np.float32(np.median(
         [trapezoid_from_lines(lines, top_y, height) for lines in all_lines],
@@ -102,14 +88,16 @@ def adapt_perspective(
 def process_frame(
     image: np.ndarray, setup: Setup, tracker: LaneTracker
 ) -> tuple[np.ndarray, str]:
-    frame = prepare_frame(image, setup)  # steps 1-3
-    lane, status = tracker.update(  # step 4 with tracking
+    # Steps 1-3
+    frame = prepare_frame(image, setup)
+    # Step 4, with tracking between frames
+    lane, status = tracker.update(
         frame.warped_binary, frame.warped_yellow
     )
     if lane is None:
         return draw_lane_not_detected(frame.corrected), status
 
-    # Steps 5 and 6.
+    # Steps 5 and 6
     offset = vehicle_offset(lane, setup.image_size, setup.matrix)
     top_y = find_clear_top(lane, frame.warped_yellow)
     result = draw_lane_area(
@@ -121,8 +109,6 @@ def process_frame(
 def open_writer(
     path: Path, fps: float, size: tuple[int, int]
 ) -> cv2.VideoWriter:
-    # H.264 (avc1) plays in QuickTime, browsers and on GitHub, but is not
-    # available in every OpenCV build; mp4v is the fallback.
     path.parent.mkdir(parents=True, exist_ok=True)
     for codec in ("avc1", "mp4v"):
         writer = cv2.VideoWriter(
@@ -134,19 +120,50 @@ def open_writer(
     raise OSError(f"Cannot open video writer for {path}")
 
 
+def save_gif(path: Path, frames: list[np.ndarray], fps: float) -> None:
+    images = [
+        Image.fromarray(cv2.cvtColor(
+            cv2.resize(frame, GIF_SIZE, interpolation=cv2.INTER_AREA),
+            cv2.COLOR_BGR2RGB,
+        ))
+        for frame in frames
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    images[0].save(
+        path,
+        save_all=True,
+        append_images=images[1:],
+        duration=round(1000 / fps),
+        loop=0,
+        optimize=True,
+    )
+
+
 def process_video(path: Path, setup: Setup) -> None:
     setup = adapt_perspective(path, setup)
     fps = cv2.VideoCapture(str(path)).get(cv2.CAP_PROP_FPS) or 25
     output_path = OUTPUT_DIR / f"{path.stem}_output.mp4"
     writer = open_writer(output_path, fps, setup.image_size)
 
+    total = int(cv2.VideoCapture(str(path)).get(cv2.CAP_PROP_FRAME_COUNT))
+    gif_start = max(0, total // 2 - int(GIF_SECONDS * fps) // 2)
+    gif_end = gif_start + int(GIF_SECONDS * fps)
+    gif_step = max(1, round(fps / GIF_FPS))
+    gif_frames = []
+
     tracker = LaneTracker(setup)
     counts = {"tracked": 0, "searched": 0, "reused": 0, "lost": 0}
-    for image in read_frames(path):
+    for index, image in enumerate(read_frames(path)):
         result, status = process_frame(image, setup, tracker)
         counts[status] += 1
         writer.write(result)
+        if gif_start <= index < gif_end and index % gif_step == 0:
+            gif_frames.append(result)
     writer.release()
+    if gif_frames:
+        save_gif(
+            DOCS_DIR / f"{path.stem}.gif", gif_frames, fps / gif_step
+        )
 
     summary = ", ".join(f"{name} {count}" for name, count in counts.items())
     print(f"{path.name}: {sum(counts.values())} frames ({summary})")
