@@ -111,7 +111,7 @@ The destination is a rectangle in the middle half of the image:
 
 `cv2.getPerspectiveTransform()` gives the matrix (and the inverse, which I need in step 6), and `warp_image()` applies it with `cv2.warpPerspective()`. For binary images I use nearest-neighbor interpolation so the mask stays black and white.
 
-**How I checked it.** If the transform is right, straight lines become vertical and parallel, so the distance between them should be the same at the top and at the bottom. `measure_lane_widths()` measures it in three horizontal bands and `lane_finding.py` prints the result. On the straight images I get 633 / 632 / 633 px and 653 / 653 / 640 px — practically constant.
+**How I checked it.** If the transform is right, straight lines become vertical and parallel, so the distance between them should be the same at the top and at the bottom. `measure_lane_widths()` measures it in three horizontal bands and `lane_finding.py` prints the result. On the straight images I get 633 / 632 / 633 px and 653 / 653 / 640 px, practically constant.
 
 Each row: the source trapezoid, the warped image with the destination rectangle, and the warped binary mask. The first two rows are the straight roads:
 
@@ -131,7 +131,7 @@ The code is in `lane_detection.py`; `find_lane()` does the whole step.
 
 **Fitting** (`fit_parallel_lines()`). Each line is a second-order polynomial `x = A·y² + B·y + C`. It is x as a function of y, because the lines are almost vertical and a function of x wouldn't work.
 
-The standard approach fits each line separately. I tried that first, and the dashed line was a problem: it has few pixels, so its curve was unstable. On `test2.jpg` it even bent the opposite way to the solid line. But in the bird's-eye view the two lines of a lane are parallel — they have the same shape and are only shifted sideways. So I fit both together: A and B (the shape) are shared, and only C (the position) is different for each line. The solid line now "helps" the dashed one. I also give both lines the same total weight, otherwise the solid line with thousands more pixels would decide everything. If either line has fewer than 200 pixels, the step gives up and returns `None`.
+The standard approach fits each line separately. I tried that first, and the dashed line was a problem: it has few pixels, so its curve was unstable. On `test2.jpg` it even bent the opposite way to the solid line. But in the bird's-eye view the two lines of a lane are parallel, they have the same shape and are only shifted sideways. So I fit both together: A and B (the shape) are shared, and only C (the position) is different for each line. The solid line now "helps" the dashed one. I also give both lines the same total weight, otherwise the solid line with thousands more pixels would decide everything. If either line has fewer than 200 pixels, the step gives up and returns `None`.
 
 On the straight images A comes out almost exactly zero, which is what it should be for a straight road.
 
@@ -172,7 +172,7 @@ Results from `lane_finding.py`:
 | challange00111 | 14105 m | −0.14 m |
 | challange00136 | 560 m | −0.06 m |
 
-The straight roads give several kilometers basically straight. The curves give 0.5–1.2 km. `challange00111` is an outlier: it is on the same curve as its neighbors (0.77 and 0.56 km) but shows over 10 km. A single frame is simply not very reliable, which is why in the video I average over time. The car is slightly left of center everywhere. All numbers are rough, the meters-per-pixel scale itself is only accurate to about 10%.
+The straight roads give several kilometers, basically straight. The curves give 0.5–1.2 km. `challange00111` is an outlier: it is on the same curve as its neighbors (0.77 and 0.56 km) but shows over 10 km. A single frame is simply not very reliable, which is why in the video I average over time. The car is slightly left of center everywhere. All numbers are rough, the meters-per-pixel scale itself is only accurate to about 10%.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
@@ -210,7 +210,7 @@ Short previews (6 seconds from the middle of each video, made by `video.py`). Cl
 
 **A different camera angle in some videos** (`adapt_perspective()` in `video.py`). At first `challenge02` and `project_video02` were bad, even though the road looked easy. The reason was the camera: it's mounted at a slightly different angle than in the test images, so the horizon is 6–21 px higher or lower. That sounds tiny, but the top of my trapezoid is only about 35 px below the horizon. The lane in the bird's-eye view looked 2.8 m or 4.7 m wide, and the plausibility check threw it out.
 
-So before processing a video, I sample 40 frames, fit straight lines to the near part of the lane and find where they meet it means that's the horizon. If it differs from the test images by more than 5 px (or the lane is more than 10% wider or narrower), the video gets its own trapezoid. This brought the lost frames down from 239 to about 10 in `challenge02` and from 43 to 0 in `project_video02`. (`project_video02` is actually from the other camera, no hood, same scene as `solidYellowLeft.jpg` — so the calibration doesn't strictly fit it, but the adapted perspective makes up for most of that.)
+So before processing a video, I sample 40 frames, fit straight lines to the near part of the lane and find where they meet. That point is the horizon. If it differs from the test images by more than 5 px (or the lane is more than 10% wider or narrower), the video gets its own trapezoid. This brought the lost frames down from 239 to about 10 in `challenge02` and from 43 to 0 in `project_video02`. (`project_video02` is actually from the other camera, no hood, same scene as `solidYellowLeft.jpg`, so the calibration doesn't strictly fit it, but the adapted perspective makes up for most of that.)
 
 Videos with a different size are resized to 1280x720. The output is written in H.264 if OpenCV supports it, so it plays in QuickTime and the browser. For the README, `video.py` also saves a 6-second GIF from the middle of each video to `docs/`, because GitHub can't play an mp4 inside a README.
 
