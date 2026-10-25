@@ -190,14 +190,13 @@ The green area follows the markings on all 11 images, including the shadows in `
 
 Short previews (6 seconds from the middle of each video, made by `video.py`). Click a preview to open the full video.
 
-| | |
+| project_video01 | project_video02 |
 |:---:|:---:|
 | [![project_video01](docs/project_video01.gif)](output_videos/project_video01_output.mp4) | [![project_video02](docs/project_video02.gif)](output_videos/project_video02_output.mp4) |
-| project_video01 | project_video02 |
+| **project_video03** | **challenge01** |
 | [![project_video03](docs/project_video03.gif)](output_videos/project_video03_output.mp4) | [![challenge01](docs/challenge01.gif)](output_videos/challenge01_output.mp4) |
-| project_video03 | challenge01 |
+| **challenge02** | **challenge03** |
 | [![challenge02](docs/challenge02.gif)](output_videos/challenge02_output.mp4) | [![challenge03](docs/challenge03.gif)](output_videos/challenge03_output.mp4) |
-| challenge02 | challenge03 |
 
 `video.py` runs the same steps on every frame. On its own a single frame can go wrong, because of a shadow, a missing dash, a wrong curvature like `challange00111` above. In a video I can use the frames before it, so `LaneTracker` in `tracking.py` adds a few things:
 
