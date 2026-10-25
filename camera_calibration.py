@@ -95,7 +95,10 @@ def collect_calibration_points(
 
         corners, pattern_size = result
         object_points = create_object_points(pattern_size)
-        if len(corners) != len(object_points) or not np.isfinite(corners).all():
+        if (
+            len(corners) != len(object_points)
+            or not np.isfinite(corners).all()
+        ):
             raise ValueError(f"Invalid calibration points: {path.name}")
 
         object_points_list.append(object_points)
@@ -192,7 +195,9 @@ def main() -> None:
     print(f"Successful detections: {len(used_paths)}/{len(image_paths)}")
 
     reference_size = Counter(image_sizes).most_common(1)[0][0]
-    scaled_points = scale_image_points(image_points, image_sizes, reference_size)
+    scaled_points = scale_image_points(
+        image_points, image_sizes, reference_size
+    )
     rms, camera_matrix, distortion, errors = calibrate_camera(
         object_points, scaled_points, reference_size
     )
